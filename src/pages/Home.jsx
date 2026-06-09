@@ -161,7 +161,7 @@ function removeLastBrick(rows) {
 }
 
 function getCurrentRowUnits(rows, maxUnits) {
-  if (rows.length === 0) return 0;
+  if (!rows || rows.length === 0) return 0;
   const last = rows[rows.length - 1];
   const units = last.reduce((s, b) => s + b.units, 0);
   return units >= maxUnits ? 0 : units;
@@ -174,7 +174,7 @@ export default function Home() {
   const [printOpen, setPrintOpen] = useState(false);
   const [symV, setSymV] = useState(false); // vertical axis → mirror left↔right
   const [symH, setSymH] = useState(false); // horizontal axis → mirror top↔bottom
-  const [scale, setScale] = useState(32);
+  const [scale, setScale] = useState(16);
   const [showGrid, setShowGrid] = useState(true);
   const [primaryColor, setPrimaryColor] = useState(DEFAULT_PRIMARY);
   const [altColor, setAltColor] = useState(DEFAULT_ALT);
@@ -539,17 +539,18 @@ export default function Home() {
   // Re-use pre-computed canvasW
   const canvasW = _canvasW;
 
-  const totalRowsH = rows.length * _rowStep + mortarWidth;
+  const totalRowsH = (rows ? rows.length : 0) * _rowStep + mortarWidth;
   const canvasH = Math.max(viewportH, totalRowsH + viewportH * 0.5);
   // Auto-scroll to bottom when rows grow
   useEffect(() => {
+    if (!rows) return;
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [rows.length]);
+  }, [rows]);
 
   const handleRepeatPattern = () => {
-    if (rows.length === 0) return;
+    if (!rows || rows.length === 0) return;
     // How many rows fit in the visible viewport
     const targetRowCount = Math.ceil(viewportH / (scale + mortarWidth)) + 2;
     if (rows.length >= targetRowCount) return;

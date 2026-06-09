@@ -401,27 +401,49 @@ const BrickCanvas = forwardRef(function BrickCanvas(
     }
   }));
 
-  const resolveColor = (brick) =>
-    brick.colorRole === 'primary' ? primaryColor :
-    brick.colorRole === 'alt' ? altColor :
-    brick.color;
+  const resolveColor = (brick) => {
+    if (!brick) return mortarColor || DEFAULT_MORTAR_COLOR;
+
+    if (brick.colorRole === 'primary') return primaryColor || DEFAULT_MORTAR_COLOR;
+    if (brick.colorRole === 'alt') return altColor || primaryColor || DEFAULT_MORTAR_COLOR;
+
+    if (typeof brick.color === 'string' && brick.color.trim()) return brick.color;
+
+    return primaryColor || altColor || mortarColor || DEFAULT_MORTAR_COLOR;
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = screenWidth * dpr;
-    canvas.height = screenHeight * dpr;
-    canvas.style.width = screenWidth + 'px';
-    canvas.style.height = screenHeight + 'px';
+
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const logicalW = Math.max(1, Number(screenWidth) || 0);
+    const logicalH = Math.max(1, Number(screenHeight) || 0);
+
+    canvas.width = Math.round(logicalW * dpr);
+    canvas.height = Math.round(logicalH * dpr);
+    canvas.style.width = `${logicalW}px`;
+    canvas.style.height = `${logicalH}px`;
 
     const ctx = canvas.getContext('2d');
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.scale(dpr, dpr);
+    if (!ctx) return;
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, logicalW, logicalH);
+
+    // Reset context state to ensure clean rendering
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.filter = 'none';
+    ctx.fillStyle = mortarColor || DEFAULT_MORTAR_COLOR;
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+    ctx.lineDashOffset = 0;
+    ctx.setLineDash([]);
 
     // Background (mortar/khaki)
     ctx.fillStyle = mortarColor || DEFAULT_MORTAR_COLOR;
-    ctx.fillRect(0, 0, screenWidth, screenHeight);
+    ctx.fillRect(0, 0, logicalW, logicalH);
 
     // Draw background image if present
     if (bgImage) {
@@ -592,7 +614,7 @@ const BrickCanvas = forwardRef(function BrickCanvas(
     }
 
     hitRectsRef.current = hitRects;
-  }, [rows, scale, showGrid, selectedIds, primaryColor, altColor, mortarWidth, insertAt, screenWidth, screenHeight, symV, symH]);
+  }, [rows, scale, showGrid, selectedIds, primaryColor, altColor, mortarColor, mortarWidth, insertAt, screenWidth, screenHeight, effect, bgImage, bgOpacity, bgScale, bgRotation, symV, symH]);
 
   const handleClick = (e) => {
     const canvas = canvasRef.current;

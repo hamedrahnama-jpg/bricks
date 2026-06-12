@@ -237,6 +237,7 @@ export default function Home() {
   const [effect, setEffect] = useState('none');
   const [mortarWidth, setMortarWidth] = useState(3);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isFullscreenFallback, setIsFullscreenFallback] = useState(false);
 
   const [bgImageEl, setBgImageEl] = useState(null);
   const [bgOpacity, setBgOpacity] = useState(0.35);
@@ -260,12 +261,27 @@ export default function Home() {
 
   useEffect(() => {
     const onFullscreenChange = () => {
-      setIsFullscreen(document.fullscreenElement === canvasViewportRef.current);
+      const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+      const canvasIsFullscreen = fullscreenElement === canvasViewportRef.current;
+      setIsFullscreen(canvasIsFullscreen || isFullscreenFallback);
+      if (canvasIsFullscreen) setIsFullscreenFallback(false);
     };
 
     document.addEventListener('fullscreenchange', onFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
-  }, []);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
+    };
+  }, [isFullscreenFallback]);
+
+  useEffect(() => {
+    setIsFullscreen(isFullscreenFallback || document.fullscreenElement === canvasViewportRef.current || document.webkitFullscreenElement === canvasViewportRef.current);
+    document.body.style.overflow = isFullscreenFallback ? 'hidden' : '';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isFullscreenFallback]);
 
   useEffect(() => {
     const measure = () => {
@@ -445,13 +461,22 @@ export default function Home() {
     if (!el) return;
 
     try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-      } else if (el.requestFullscreen) {
-        await el.requestFullscreen();
+      const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+      const exitFullscreen = document.exitFullscreen?.bind(document) || document.webkitExitFullscreen?.bind(document);
+      const requestFullscreen = el.requestFullscreen?.bind(el) || el.webkitRequestFullscreen?.bind(el);
+
+      if (fullscreenElement) {
+        await exitFullscreen?.();
+      } else if (isFullscreenFallback) {
+        setIsFullscreenFallback(false);
+      } else if (requestFullscreen) {
+        await requestFullscreen();
+      } else {
+        setIsFullscreenFallback(true);
       }
     } catch (error) {
       console.error('Unable to toggle fullscreen mode', error);
+      setIsFullscreenFallback(v => !v);
     }
   };
 
@@ -794,7 +819,24 @@ export default function Home() {
         />
       )}
 
-      <div ref={canvasViewportRef} className="flex-1 min-h-0 w-full overflow-hidden bg-background">
+      <div
+        ref={canvasViewportRef}
+        className={`overflow-hidden bg-background ${
+          isFullscreenFallback
+            ? 'fixed inset-0 z-[100] h-[100dvh] w-screen flex-none'
+            : 'flex-1 min-h-0 w-full'
+        }`}
+      >
+        {isFullscreen && (
+          <button
+            type="button"
+            onClick={handleToggleFullscreen}
+            className="absolute right-3 top-3 z-[60] rounded bg-black/45 px-3 py-1.5 text-xs font-medium text-white backdrop-blur-sm"
+            title="Exit fullscreen"
+          >
+            Exit
+          </button>
+        )}
         <div
           ref={scrollRef}
           style={{ height: '100%', width: '100%', overflowX: 'hidden' }}

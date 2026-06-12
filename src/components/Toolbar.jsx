@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Grid, Printer, Download, Trash2, Plus, Minus, Save, FolderOpen, ChevronDown, Sparkles, Menu, X, ImagePlus, Undo2, Redo2, Maximize2 } from 'lucide-react';
+import { Grid, Printer, Download, Trash2, Plus, Minus, Save, FolderOpen, ChevronDown, Sparkles, Menu, X, ImagePlus, Undo2, Redo2, Maximize2, BookMarked, Palette, Sun, RotateCw, ZoomIn, ZoomOut, MoveHorizontal, MoveVertical } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import TemplateMenu from './TemplateMenu';
 
@@ -11,6 +11,17 @@ const EFFECTS = [
   { id: 'hatched',    label: 'Hatched' },
 ];
 
+const PALETTE_KEY = 'brickwall_palette';
+
+function loadPalette() {
+  try { return JSON.parse(localStorage.getItem(PALETTE_KEY)) || []; }
+  catch { return []; }
+}
+
+function savePalette(colors) {
+  localStorage.setItem(PALETTE_KEY, JSON.stringify(colors));
+}
+
 export default function Toolbar({
   primaryColor, altColor, onPrimaryChange, onAltChange,
   mortarColor, onMortarChange,
@@ -20,11 +31,46 @@ export default function Toolbar({
   onPrint, onExportPDF, onExportPNG, onExportSVG, onClear, onLoadTemplate, onSave, onLoad,
   onBgImageLoad,
   onFullscreen,
-  onUndo, onRedo, canUndo, canRedo
+  onUndo, onRedo, canUndo, canRedo,
+  rows,
+  modules = [],
+  onSaveModule,
+  onDeleteModule,
+  onAppendModule,
+  bgImage, onBgRemove,
+  bgOpacity, onBgOpacityChange,
+  bgScale, onBgScaleChange,
+  bgRotation, onBgRotationChange,
+  bgOffsetX, onBgOffsetXChange,
+  bgOffsetY, onBgOffsetYChange
 }) {
   const fileInputRef = useRef(null);
   const bgInputRef = useRef(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [palette, setPalette] = useState(loadPalette);
+  const [moduleName, setModuleName] = useState('');
+
+  const compactButton = "h-7 min-w-7 flex items-center justify-center gap-1.5 rounded px-2 text-xs text-muted-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:cursor-not-allowed";
+  const activeButton = "bg-primary/20 text-primary border border-primary/40 hover:bg-primary/25";
+
+  const addPaletteColor = (color) => {
+    if (palette.includes(color)) return;
+    const next = [...palette, color].slice(-18);
+    setPalette(next);
+    savePalette(next);
+  };
+
+  const removePaletteColor = (color) => {
+    const next = palette.filter(c => c !== color);
+    setPalette(next);
+    savePalette(next);
+  };
+
+  const handleSaveModule = () => {
+    const name = moduleName.trim() || `Module ${modules.length + 1}`;
+    onSaveModule?.(name, rows);
+    setModuleName('');
+  };
 
   const ColorPickers = () => (
     <div className="flex flex-wrap items-center gap-2">
@@ -48,94 +94,160 @@ export default function Toolbar({
     </div>
   );
 
+  const RibbonGroup = ({ title, children, className = "" }) => (
+    <div className={`flex h-full min-w-fit flex-col justify-center gap-1 border-r border-border/80 px-3 ${className}`}>
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">{title}</div>
+      <div className="flex items-center gap-1.5">{children}</div>
+    </div>
+  );
+
   return (
     <>
       <input ref={fileInputRef} type="file" accept=".brickwall,.json" onChange={onLoad} className="hidden" />
       <input ref={bgInputRef} type="file" accept="image/*" onChange={onBgImageLoad} className="hidden" />
 
-      {/* ── Desktop toolbar ── */}
-      <div className="hidden md:flex h-14 bg-card border-b border-border items-center px-3 gap-3 flex-shrink-0 overflow-x-auto">
-        <ColorPickers />
+      {/* Desktop ribbon */}
+      <div className="hidden md:flex h-[76px] bg-card border-b border-border items-stretch flex-shrink-0 overflow-x-auto">
+        <RibbonGroup title="Colors" className="pl-3">
+          <Palette className="h-3.5 w-3.5 text-muted-foreground" />
+          <ColorPickers />
+          <div className="flex max-w-[180px] items-center gap-1 overflow-hidden">
+            {palette.map(color => (
+              <div key={color} className="group relative h-5 w-5 flex-shrink-0">
+                <button
+                  style={{ backgroundColor: color }}
+                  className="h-5 w-5 rounded border border-border shadow-sm"
+                  title={`${color}: click primary, right-click alt`}
+                  onClick={() => onPrimaryChange(color)}
+                  onContextMenu={e => { e.preventDefault(); onAltChange(color); }}
+                />
+                <button
+                  onClick={() => removePaletteColor(color)}
+                  className="absolute -right-1 -top-1 hidden h-3 w-3 items-center justify-center rounded-full bg-destructive text-white group-hover:flex"
+                  title="Remove swatch"
+                >
+                  <X className="h-2 w-2" />
+                </button>
+              </div>
+            ))}
+            <button onClick={() => addPaletteColor(primaryColor)} title="Save primary color" className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border border-dashed border-border hover:border-primary">
+              <div className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: primaryColor }} />
+            </button>
+            <button onClick={() => addPaletteColor(altColor)} title="Save alternate color" className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border border-dashed border-border hover:border-primary">
+              <div className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: altColor }} />
+            </button>
+          </div>
+        </RibbonGroup>
 
-        <div className="w-px h-6 bg-border flex-shrink-0" />
-
-        {/* Scale controls */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <button onClick={() => onScaleChange(Math.max(4, scale - 2))}
-            className="w-7 h-7 flex items-center justify-center rounded hover:bg-accent text-foreground/70 transition-colors">
+        <RibbonGroup title="Build">
+          <button onClick={() => onScaleChange(Math.max(4, scale - 2))} className={compactButton} title="Zoom out">
             <Minus className="w-3.5 h-3.5" />
           </button>
-          <span className="text-xs text-muted-foreground w-12 text-center tabular-nums">{scale}px</span>
-          <button onClick={() => onScaleChange(Math.min(96, scale + 2))}
-            className="w-7 h-7 flex items-center justify-center rounded hover:bg-accent text-foreground/70 transition-colors">
+          <span className="w-12 text-center text-xs text-muted-foreground tabular-nums">{scale}px</span>
+          <button onClick={() => onScaleChange(Math.min(96, scale + 2))} className={compactButton} title="Zoom in">
             <Plus className="w-3.5 h-3.5" />
           </button>
-          <span className="text-xs text-muted-foreground whitespace-nowrap">{maxUnits}u/row</span>
-        </div>
-
-        <div className="w-px h-6 bg-border flex-shrink-0" />
-
-        {/* Undo / Redo */}
-        <button onClick={onUndo} disabled={!canUndo} title="Undo (Ctrl+Z)"
-          className="w-7 h-7 flex items-center justify-center rounded hover:bg-accent text-foreground/70 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0">
-          <Undo2 className="w-3.5 h-3.5" />
-        </button>
-        <button onClick={onRedo} disabled={!canRedo} title="Redo (Ctrl+Y)"
-          className="w-7 h-7 flex items-center justify-center rounded hover:bg-accent text-foreground/70 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0">
-          <Redo2 className="w-3.5 h-3.5" />
-        </button>
-
-        <div className="w-px h-6 bg-border flex-shrink-0" />
-        <TemplateMenu primaryColor={primaryColor} altColor={altColor} maxUnits={maxUnits} onLoad={onLoadTemplate} />
-        <div className="w-px h-6 bg-border flex-shrink-0" />
-
-        <button onClick={onGridToggle}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs transition-colors flex-shrink-0 ${
-            showGrid ? 'bg-primary/20 text-primary border border-primary/40' : 'hover:bg-accent text-muted-foreground'
-          }`}>
-          <Grid className="w-3.5 h-3.5" />Grid
-        </button>
-
-        <div className="w-px h-6 bg-border flex-shrink-0" />
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs transition-colors flex-shrink-0 ${
-              effect !== 'none' ? 'bg-primary/20 text-primary border border-primary/40' : 'hover:bg-accent text-muted-foreground'
-            }`}>
-              <Sparkles className="w-3.5 h-3.5" />
-              {EFFECTS.find(e => e.id === effect)?.label ?? 'Effect'}
-              <ChevronDown className="w-3 h-3" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-40">
-            {EFFECTS.map(ef => (
-              <DropdownMenuItem key={ef.id} onClick={() => onEffectChange(ef.id)}
-                className={effect === ef.id ? 'bg-accent font-medium' : ''}>
-                {ef.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
-          <button
-            onClick={onFullscreen}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs hover:bg-accent text-muted-foreground transition-colors flex-shrink-0"
-            title="Fullscreen canvas"
-          >
-            <Maximize2 className="w-3.5 h-3.5" /> Fullscreen
+          <span className="whitespace-nowrap text-xs text-muted-foreground">{maxUnits}u/row</span>
+          <button onClick={onUndo} disabled={!canUndo} title="Undo (Ctrl+Z)" className={compactButton}>
+            <Undo2 className="w-3.5 h-3.5" />
           </button>
-          <button
-            onClick={() => bgInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs hover:bg-accent text-muted-foreground transition-colors flex-shrink-0"
-            title="Upload background image"
-          >
-            <ImagePlus className="w-3.5 h-3.5" /> BG Photo
+          <button onClick={onRedo} disabled={!canRedo} title="Redo (Ctrl+Y)" className={compactButton}>
+            <Redo2 className="w-3.5 h-3.5" />
+          </button>
+        </RibbonGroup>
+
+        <RibbonGroup title="Templates">
+          <TemplateMenu primaryColor={primaryColor} altColor={altColor} maxUnits={maxUnits} onLoad={onLoadTemplate} />
+        </RibbonGroup>
+
+        <RibbonGroup title="Modules">
+          <BookMarked className="h-3.5 w-3.5 text-muted-foreground" />
+          <input
+            value={moduleName}
+            onChange={e => setModuleName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSaveModule()}
+            placeholder="Module name"
+            className="h-7 w-28 rounded border border-border bg-background/60 px-2 text-xs text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/40"
+          />
+          <button onClick={handleSaveModule} disabled={!rows?.length} title="Save current rows as module" className={`${compactButton} ${activeButton}`}>
+            <Plus className="h-3.5 w-3.5" />Save
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs hover:bg-accent text-muted-foreground transition-colors">
+              <button className={compactButton}>
+                Modules ({modules.length}) <ChevronDown className="h-3 w-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              {modules.length === 0 ? (
+                <DropdownMenuItem disabled>No modules saved</DropdownMenuItem>
+              ) : modules.map(mod => (
+                <DropdownMenuItem key={mod.id} onSelect={e => e.preventDefault()} className="gap-2">
+                  <button onClick={() => onAppendModule?.(mod)} className="min-w-0 flex-1 truncate text-left text-xs">{mod.name}</button>
+                  <button onClick={() => onDeleteModule?.(mod.id)} className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" title="Delete module">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </RibbonGroup>
+
+        <RibbonGroup title="View">
+          <button onClick={onGridToggle} className={`${compactButton} ${showGrid ? activeButton : ''}`}>
+            <Grid className="w-3.5 h-3.5" />Grid
+          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className={`${compactButton} ${effect !== 'none' ? activeButton : ''}`}>
+                <Sparkles className="w-3.5 h-3.5" />
+                {EFFECTS.find(e => e.id === effect)?.label ?? 'Effect'}
+                <ChevronDown className="w-3 h-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-40">
+              {EFFECTS.map(ef => (
+                <DropdownMenuItem key={ef.id} onClick={() => onEffectChange(ef.id)}
+                  className={effect === ef.id ? 'bg-accent font-medium' : ''}>
+                  {ef.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <button onClick={onFullscreen} className={compactButton} title="Fullscreen canvas">
+            <Maximize2 className="w-3.5 h-3.5" />Fullscreen
+          </button>
+        </RibbonGroup>
+
+        <RibbonGroup title="Background">
+          <button onClick={() => bgInputRef.current?.click()} className={compactButton} title="Upload background image">
+            <ImagePlus className="w-3.5 h-3.5" />Photo
+          </button>
+          {bgImage && (
+            <>
+              <Sun className="h-3.5 w-3.5 text-muted-foreground" />
+              <input type="range" min="0" max="1" step="0.05" value={bgOpacity} onChange={e => onBgOpacityChange(parseFloat(e.target.value))} className="w-16 accent-primary" title="Background opacity" />
+              <ZoomOut className="h-3.5 w-3.5 text-muted-foreground" />
+              <input type="range" min="0.1" max="3" step="0.05" value={bgScale} onChange={e => onBgScaleChange(parseFloat(e.target.value))} className="w-16 accent-primary" title="Background scale" />
+              <ZoomIn className="h-3.5 w-3.5 text-muted-foreground" />
+              <RotateCw className="h-3.5 w-3.5 text-muted-foreground" />
+              <input type="range" min="-180" max="180" step="1" value={bgRotation} onChange={e => onBgRotationChange(parseInt(e.target.value))} className="w-16 accent-primary" title="Background rotation" />
+              <MoveHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+              <input type="range" min="-800" max="800" step="5" value={bgOffsetX} onChange={e => onBgOffsetXChange(parseInt(e.target.value))} className="w-16 accent-primary" title="Move background horizontally" />
+              <MoveVertical className="h-3.5 w-3.5 text-muted-foreground" />
+              <input type="range" min="-800" max="800" step="5" value={bgOffsetY} onChange={e => onBgOffsetYChange(parseInt(e.target.value))} className="w-16 accent-primary" title="Move background vertically" />
+              <button onClick={onBgRemove} className={`${compactButton} text-destructive hover:bg-destructive/10`} title="Remove background image">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </>
+          )}
+        </RibbonGroup>
+
+        <div className="ml-auto flex h-full min-w-fit flex-col justify-center gap-1 px-3">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground/70">File</div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className={compactButton}>
                 File <ChevronDown className="w-3 h-3" />
               </button>
             </DropdownMenuTrigger>
@@ -155,7 +267,6 @@ export default function Toolbar({
           </DropdownMenu>
         </div>
       </div>
-
       {/* ── Mobile toolbar ── */}
       <div className="flex md:hidden h-12 bg-card border-b border-border items-center px-3 gap-2 flex-shrink-0">
         <span className="text-xs font-semibold text-foreground/70 flex-1">Brick Pattern Drawer</span>

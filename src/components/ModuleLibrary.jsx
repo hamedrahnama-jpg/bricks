@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BookMarked, Plus, Trash2, GripVertical, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { BookMarked, Plus, GripVertical, X, ChevronDown, ChevronUp } from 'lucide-react';
 
 // Mini canvas preview of a module's rows
 function ModulePreview({ rows, primaryColor, altColor, mortarColor }) {

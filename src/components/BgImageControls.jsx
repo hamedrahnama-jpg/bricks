@@ -1,6 +1,19 @@
-import { RotateCw, ZoomIn, ZoomOut, Sun, X, Move } from 'lucide-react';
+import { MoveHorizontal, MoveVertical, RotateCw, ZoomIn, ZoomOut, Sun, X } from 'lucide-react';
 
-export default function BgImageControls({ bgImage, onRemove, opacity, onOpacityChange, scale, onScaleChange, rotation, onRotationChange }) {
+export default function BgImageControls({
+  bgImage,
+  onRemove,
+  opacity,
+  onOpacityChange,
+  scale,
+  onScaleChange,
+  rotation,
+  onRotationChange,
+  offsetX,
+  onOffsetXChange,
+  offsetY,
+  onOffsetYChange
+}) {
   if (!bgImage) return null;
 
   return (
@@ -45,6 +58,30 @@ export default function BgImageControls({ bgImage, onRemove, opacity, onOpacityC
           title="Rotation"
         />
         <span className="text-xs text-muted-foreground tabular-nums w-10">{rotation}°</span>
+      </div>
+
+      <div className="flex items-center gap-1.5">
+        <MoveHorizontal className="w-3.5 h-3.5 text-muted-foreground" />
+        <input
+          type="range" min="-800" max="800" step="5"
+          value={offsetX}
+          onChange={e => onOffsetXChange(parseInt(e.target.value))}
+          className="w-24 accent-primary"
+          title="Move horizontally"
+        />
+        <span className="text-xs text-muted-foreground tabular-nums w-12">{offsetX}px</span>
+      </div>
+
+      <div className="flex items-center gap-1.5">
+        <MoveVertical className="w-3.5 h-3.5 text-muted-foreground" />
+        <input
+          type="range" min="-800" max="800" step="5"
+          value={offsetY}
+          onChange={e => onOffsetYChange(parseInt(e.target.value))}
+          className="w-24 accent-primary"
+          title="Move vertically"
+        />
+        <span className="text-xs text-muted-foreground tabular-nums w-12">{offsetY}px</span>
       </div>
 
       {/* Remove */}

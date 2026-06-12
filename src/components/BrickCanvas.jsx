@@ -261,6 +261,37 @@ function applyAged(ctx, x, y, w, h, id) {
   ctx.restore();
 }
 
+function applySurfaceEffect(ctx, effect, x, y, w, h, id) {
+  if (effect === 'rough') applyRoughEdges(ctx, x, y, w, h, id);
+  else if (effect === 'watercolor') applyWatercolor(ctx, x, y, w, h, id);
+}
+
+function lightenColor(color, amount = 0.35) {
+  const clamp = value => Math.max(0, Math.min(255, Math.round(value)));
+  const mix = channel => clamp(channel + (255 - channel) * amount);
+
+  if (typeof color !== 'string') return color;
+
+  const hex = color.trim();
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(hex)) {
+    const full = hex.length === 4
+      ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`
+      : hex;
+    const r = parseInt(full.slice(1, 3), 16);
+    const g = parseInt(full.slice(3, 5), 16);
+    const b = parseInt(full.slice(5, 7), 16);
+    return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+  }
+
+  const rgb = hex.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  if (rgb) {
+    const [, r, g, b] = rgb;
+    return `rgb(${mix(Number(r))}, ${mix(Number(g))}, ${mix(Number(b))})`;
+  }
+
+  return color;
+}
+
 function applyHatched(ctx, x, y, w, h, isVertical, brickColor) {
   ctx.save();
   ctx.beginPath();
@@ -274,13 +305,9 @@ function applyHatched(ctx, x, y, w, h, isVertical, brickColor) {
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
 
-  // Fill with a lighter version of the hatch color
-  ctx.globalAlpha = 0.35;
-  ctx.fillStyle = brickColor;
-  ctx.fillRect(x, y, w, h);
-  // Mix in white to further lighten
-  ctx.globalAlpha = 0.45;
-  ctx.fillStyle = 'white';
+  // Fill with the hatch color mixed 35% toward white.
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = lightenColor(brickColor, 0.35);
   ctx.fillRect(x, y, w, h);
 
   ctx.strokeStyle = brickColor;
@@ -342,7 +369,7 @@ function applySketch(ctx, x, y, w, h, id, brickColor) {
 // ────────────────────────────────────────────────────────────────────────────
 
 const BrickCanvas = forwardRef(function BrickCanvas(
-  { rows, scale, showGrid, selectedIds, primaryColor, altColor, mortarColor, mortarWidth = 3, effect, insertAt, screenWidth, screenHeight, onBrickClick, onVoidClick, bgImage, bgOpacity, bgScale, bgRotation, symV, symH, symVAxisCol, symHAxisRow },
+  { rows, scale, showGrid, selectedIds, primaryColor, altColor, mortarColor, mortarWidth = 3, effect, insertAt, screenWidth, screenHeight, onBrickClick, onVoidClick, bgImage, bgOpacity, bgScale, bgRotation, bgOffsetX = 0, bgOffsetY = 0, symV, symH, symVAxisCol, symHAxisRow },
   ref
 ) {
   const canvasRef = useRef(null);
@@ -390,8 +417,7 @@ const BrickCanvas = forwardRef(function BrickCanvas(
               ctx.fillRect(bx, by, bw, bh);
               drawTexture(ctx, bx, by, bw, bh, brick.id);
               if (effect && effect !== 'none') {
-                if (effect === 'rough') applyRoughEdges(ctx, bx, by, bw, bh, brick.id);
-                else if (effect === 'watercolor') applyWatercolor(ctx, bx, by, bw, bh, brick.id);
+                applySurfaceEffect(ctx, effect, bx, by, bw, bh, brick.id);
               }
             }
           }
@@ -468,8 +494,8 @@ const BrickCanvas = forwardRef(function BrickCanvas(
       ctx.save();
       ctx.globalAlpha = bgOpacity ?? 0.4;
       ctx.filter = 'grayscale(60%) brightness(1.1)';
-      const cx = screenWidth / 2;
-      const cy = screenHeight / 2;
+      const cx = screenWidth / 2 + (bgOffsetX ?? 0);
+      const cy = screenHeight / 2 + (bgOffsetY ?? 0);
       ctx.translate(cx, cy);
       ctx.rotate(((bgRotation ?? 0) * Math.PI) / 180);
       const s = bgScale ?? 1;
@@ -530,10 +556,7 @@ const BrickCanvas = forwardRef(function BrickCanvas(
             ctx.fillRect(bx, by, bw, bh);
             drawTexture(ctx, bx, by, bw, bh, brick.id);
             if (effect && effect !== 'none') {
-              const rc = resolveColor(brick);
-              if (effect === 'rough') applyRoughEdges(ctx, bx, by, bw, bh, brick.id);
-              else if (effect === 'watercolor') applyWatercolor(ctx, bx, by, bw, bh, brick.id);
-              else if (effect === 'sketch') applySketch(ctx, bx, by, bw, bh, brick.id, rc);
+              applySurfaceEffect(ctx, effect, bx, by, bw, bh, brick.id);
             }
           }
 
@@ -640,7 +663,7 @@ const BrickCanvas = forwardRef(function BrickCanvas(
     }
 
     hitRectsRef.current = hitRects;
-  }, [rows, scale, showGrid, selectedIds, primaryColor, altColor, mortarColor, mortarWidth, insertAt, screenWidth, screenHeight, effect, bgImage, bgOpacity, bgScale, bgRotation, symV, symH, symVAxisCol, symHAxisRow]);
+  }, [rows, scale, showGrid, selectedIds, primaryColor, altColor, mortarColor, mortarWidth, insertAt, screenWidth, screenHeight, effect, bgImage, bgOpacity, bgScale, bgRotation, bgOffsetX, bgOffsetY, symV, symH, symVAxisCol, symHAxisRow]);
 
   const handleClick = (e) => {
     const canvas = canvasRef.current;

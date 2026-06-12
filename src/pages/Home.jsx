@@ -9,14 +9,13 @@ import useUndoRedo from '../hooks/useUndoRedo';
 import useModuleLibrary from '../hooks/useModuleLibrary';
 import ModuleLibrary from '../components/ModuleLibrary';
 import PrintDialog from '../components/PrintDialog';
-import SymmetryControls from '../components/SymmetryControls';
 
 let _id = 1;
 const uid = () => String(_id++);
 
 const DEFAULT_PRIMARY = '#b5523a';
 const DEFAULT_ALT = '#c49a50';
-const TARGET_VISIBLE_GRID_COLUMNS = 27;
+const TARGET_VISIBLE_GRID_COLUMNS = 25;
 
 function getMaxUnits(screenW, scale, mortar) {
   return Math.floor((screenW + mortar) / (scale + mortar));
@@ -347,6 +346,8 @@ export default function Home() {
   const [bgOpacity, setBgOpacity] = useState(0.35);
   const [bgScale, setBgScale] = useState(1);
   const [bgRotation, setBgRotation] = useState(0);
+  const [bgOffsetX, setBgOffsetX] = useState(0);
+  const [bgOffsetY, setBgOffsetY] = useState(0);
 
   const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
   const canvasRef = useRef(null);
@@ -637,7 +638,11 @@ export default function Home() {
     if (!file) return;
     const url = URL.createObjectURL(file);
     const img = new Image();
-    img.onload = () => setBgImageEl(img);
+    img.onload = () => {
+      setBgImageEl(img);
+      setBgOffsetX(0);
+      setBgOffsetY(0);
+    };
     img.src = url;
     e.target.value = '';
   };
@@ -874,42 +879,49 @@ export default function Home() {
         onSave={handleSave} onLoad={handleLoad}
         onBgImageLoad={handleBgImageLoad}
         onFullscreen={handleToggleFullscreen}
-      />
-      <ColorPalette
-        primaryColor={primaryColor} altColor={altColor}
-        onPrimaryChange={setPrimaryColor} onAltChange={setAltColor}
-      />
-      <div className="flex items-center gap-2 px-3 py-1 bg-card border-b border-border flex-shrink-0">
-        <span className="text-xs text-muted-foreground/60 mr-1">Symmetry:</span>
-        <SymmetryControls
-          symV={symV} symH={symH}
-          onToggleV={() => setSymV(v => !v)}
-          onToggleH={() => setSymH(v => !v)}
-          maxUnits={maxUnits}
-          maxRows={Math.max(0, Math.ceil(canvasH / _rowStep) - 1)}
-          symVAxisCol={symVAxisCol}
-          symHAxisRow={symHAxisRow}
-          onVAxisChange={setSymVAxisCol}
-          onHAxisChange={setSymHAxisRow}
-        />
-      </div>
-      <ModuleLibrary
         rows={rows}
-        primaryColor={primaryColor} altColor={altColor} mortarColor={mortarColor}
         modules={modules}
         onSaveModule={saveModule}
         onDeleteModule={deleteModule}
         onAppendModule={handleAppendModule}
-        open={libraryOpen}
-        onToggle={() => setLibraryOpen(v => !v)}
-      />
-      <BgImageControls
         bgImage={bgImageEl}
-        onRemove={() => setBgImageEl(null)}
-        opacity={bgOpacity} onOpacityChange={setBgOpacity}
-        scale={bgScale} onScaleChange={setBgScale}
-        rotation={bgRotation} onRotationChange={setBgRotation}
+        onBgRemove={() => setBgImageEl(null)}
+        bgOpacity={bgOpacity}
+        onBgOpacityChange={setBgOpacity}
+        bgScale={bgScale}
+        onBgScaleChange={setBgScale}
+        bgRotation={bgRotation}
+        onBgRotationChange={setBgRotation}
+        bgOffsetX={bgOffsetX}
+        onBgOffsetXChange={setBgOffsetX}
+        bgOffsetY={bgOffsetY}
+        onBgOffsetYChange={setBgOffsetY}
       />
+      <div className="md:hidden">
+        <ColorPalette
+          primaryColor={primaryColor} altColor={altColor}
+          onPrimaryChange={setPrimaryColor} onAltChange={setAltColor}
+        />
+        <ModuleLibrary
+          rows={rows}
+          primaryColor={primaryColor} altColor={altColor} mortarColor={mortarColor}
+          modules={modules}
+          onSaveModule={saveModule}
+          onDeleteModule={deleteModule}
+          onAppendModule={handleAppendModule}
+          open={libraryOpen}
+          onToggle={() => setLibraryOpen(v => !v)}
+        />
+        <BgImageControls
+          bgImage={bgImageEl}
+          onRemove={() => setBgImageEl(null)}
+          opacity={bgOpacity} onOpacityChange={setBgOpacity}
+          scale={bgScale} onScaleChange={setBgScale}
+          rotation={bgRotation} onRotationChange={setBgRotation}
+          offsetX={bgOffsetX} onOffsetXChange={setBgOffsetX}
+          offsetY={bgOffsetY} onOffsetYChange={setBgOffsetY}
+        />
+      </div>
 
       {selectedIds.size > 0 && (
         <SelectionBar
@@ -998,6 +1010,8 @@ export default function Home() {
           bgOpacity={bgOpacity}
           bgScale={bgScale}
           bgRotation={bgRotation}
+          bgOffsetX={bgOffsetX}
+          bgOffsetY={bgOffsetY}
           symV={symV}
           symH={symH}
           symVAxisCol={symVAxisCol}
@@ -1012,6 +1026,15 @@ export default function Home() {
         maxUnits={maxUnits}
         onRepeatPattern={handleRepeatPattern}
         onRepeatRow={handleRepeatRow}
+        symV={symV}
+        symH={symH}
+        onToggleSymV={() => setSymV(v => !v)}
+        onToggleSymH={() => setSymH(v => !v)}
+        maxRows={Math.max(0, Math.ceil(canvasH / _rowStep) - 1)}
+        symVAxisCol={symVAxisCol}
+        symHAxisRow={symHAxisRow}
+        onVAxisChange={setSymVAxisCol}
+        onHAxisChange={setSymHAxisRow}
       />
 
       <PrintDialog

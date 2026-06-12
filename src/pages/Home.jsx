@@ -236,6 +236,7 @@ export default function Home() {
   const [insertAt, setInsertAt] = useState(null);
   const [effect, setEffect] = useState('none');
   const [mortarWidth, setMortarWidth] = useState(3);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const [bgImageEl, setBgImageEl] = useState(null);
   const [bgOpacity, setBgOpacity] = useState(0.35);
@@ -256,6 +257,15 @@ export default function Home() {
   const _colStep = scale + mortarWidth;
   const _canvasW = Math.max(_colStep, size.w);
   const maxUnits = getMaxUnits(_canvasW, scale, mortarWidth);
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === canvasViewportRef.current);
+    };
+
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
 
   useEffect(() => {
     const measure = () => {
@@ -429,6 +439,21 @@ export default function Home() {
   };
 
   const handlePrint = () => setPrintOpen(true);
+
+  const handleToggleFullscreen = async () => {
+    const el = canvasViewportRef.current;
+    if (!el) return;
+
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else if (el.requestFullscreen) {
+        await el.requestFullscreen();
+      }
+    } catch (error) {
+      console.error('Unable to toggle fullscreen mode', error);
+    }
+  };
 
   const handleExportPNG = () => {
     if (!canvasRef.current) return;
@@ -729,6 +754,7 @@ export default function Home() {
         onUndo={undo} onRedo={redo} canUndo={canUndo} canRedo={canRedo}
         onSave={handleSave} onLoad={handleLoad}
         onBgImageLoad={handleBgImageLoad}
+        onFullscreen={handleToggleFullscreen}
       />
       <ColorPalette
         primaryColor={primaryColor} altColor={altColor}
@@ -774,6 +800,7 @@ export default function Home() {
           style={{ height: '100%', width: '100%', overflowX: 'hidden' }}
           className="overflow-y-auto relative"
           onClick={() => { setSelectedIds(new Set()); insertAtRef.current = null; setInsertAt(null); }}
+          onDoubleClick={isFullscreen ? handleToggleFullscreen : undefined}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}

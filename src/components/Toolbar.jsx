@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Grid, Printer, Download, Trash2, Plus, Minus, Save, FolderOpen, ChevronDown, Sparkles, Menu, X, ImagePlus, Undo2, Redo2 } from 'lucide-react';
+import { Grid, Printer, Download, Trash2, Plus, Minus, Save, FolderOpen, ChevronDown, Sparkles, Menu, X, ImagePlus, Undo2, Redo2, Maximize2 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import TemplateMenu from './TemplateMenu';
 
@@ -19,6 +19,7 @@ export default function Toolbar({
   effect, onEffectChange,
   onPrint, onExportPDF, onExportPNG, onExportSVG, onClear, onLoadTemplate, onSave, onLoad,
   onBgImageLoad,
+  onFullscreen,
   onUndo, onRedo, canUndo, canRedo
 }) {
   const fileInputRef = useRef(null);
@@ -119,6 +120,13 @@ export default function Toolbar({
 
         <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
           <button
+            onClick={onFullscreen}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs hover:bg-accent text-muted-foreground transition-colors flex-shrink-0"
+            title="Fullscreen canvas"
+          >
+            <Maximize2 className="w-3.5 h-3.5" /> Fullscreen
+          </button>
+          <button
             onClick={() => bgInputRef.current?.click()}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs hover:bg-accent text-muted-foreground transition-colors flex-shrink-0"
             title="Upload background image"
@@ -172,6 +180,11 @@ export default function Toolbar({
         <button onClick={onRedo} disabled={!canRedo} title="Redo"
           className="w-8 h-8 flex items-center justify-center rounded hover:bg-accent text-foreground/70 disabled:opacity-30 disabled:cursor-not-allowed">
           <Redo2 className="w-4 h-4" />
+        </button>
+
+        <button onClick={onFullscreen} title="Fullscreen canvas"
+          className="w-8 h-8 flex items-center justify-center rounded hover:bg-accent text-foreground/70">
+          <Maximize2 className="w-4 h-4" />
         </button>
 
         <button onClick={() => setMobileOpen(v => !v)}

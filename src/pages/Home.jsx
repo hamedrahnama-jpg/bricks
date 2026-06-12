@@ -776,6 +776,23 @@ export default function Home() {
     const maxRow = Math.max(0, Math.ceil(canvasH / _rowStep) - 1);
     setSymHAxisRow(prev => prev > 0 ? Math.min(prev, maxRow) : Math.floor(Math.max(0, visibleRowCount - 1) / 2));
   }, [canvasH, _rowStep, visibleRowCount]);
+
+  const getDisplayRows = (sourceRows) => {
+    if (!symV && !symH) return sourceRows;
+
+    let r = sourceRows.map(row => [...row]);
+
+    if (symV) {
+      r = r.map(row => mirrorRowAroundColumn(row, maxUnits, symVAxisCol));
+    }
+
+    if (symH) {
+      r = mirrorRowsAroundRow(r, symHAxisRow, maxUnits);
+    }
+
+    return r;
+  };
+
   // Auto-scroll to bottom when rows grow
   useEffect(() => {
     if (!rows) return;
@@ -788,11 +805,13 @@ export default function Home() {
 
   const handleRepeatPattern = () => {
     if (!rows || rows.length === 0) return;
+    const pattern = getDisplayRows(rows).filter(row => row && row.length > 0);
+    if (pattern.length === 0) return;
+
     // How many rows fit in the visible viewport
     const targetRowCount = Math.ceil(viewportH / (scale + mortarWidth)) + 2;
-    if (rows.length >= targetRowCount) return;
+    if (pattern.length >= targetRowCount) return;
 
-    const pattern = rows;
     const newRows = [];
     for (let i = 0; i < targetRowCount; i++) {
       // Clone each row, giving bricks fresh ids to avoid key collisions
@@ -803,6 +822,8 @@ export default function Home() {
     setSelectedIds(new Set());
     setInsertAt(null);
     insertAtRef.current = null;
+    setSymV(false);
+    setSymH(false);
   };
 
   const handleRepeatRow = () => {
@@ -831,21 +852,7 @@ export default function Home() {
   // ── Symmetry mirroring ────────────────────────────────────────────────────
   // Apply symmetry on a read-only derived copy for rendering only.
   // The actual `rows` state is never mutated by symmetry.
-  const displayRows = (() => {
-    if (!symV && !symH) return rows;
-
-    let r = rows.map(row => [...row]);
-
-    if (symV) {
-      r = r.map(row => mirrorRowAroundColumn(row, maxUnits, symVAxisCol));
-    }
-
-    if (symH) {
-      r = mirrorRowsAroundRow(r, symHAxisRow, maxUnits);
-    }
-
-    return r;
-  })();
+  const displayRows = getDisplayRows(rows);
 
   const curRowUnits = getCurrentRowUnits(rows, maxUnits);
 

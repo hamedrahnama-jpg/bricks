@@ -350,16 +350,17 @@ const BrickCanvas = forwardRef(function BrickCanvas(
 
   useImperativeHandle(ref, () => ({
     getCanvas: () => canvasRef.current,
-    renderForPrint: () => {
+    renderForPrint: ({ width, height } = {}) => {
       const src = canvasRef.current;
       if (!src) return null;
       const tmp = document.createElement('canvas');
-      tmp.width = src.width;
-      tmp.height = src.height;
       const dpr = window.devicePixelRatio || 1;
+      const W = Math.max(1, Number(width) || screenWidth);
+      const H = Math.max(1, Number(height) || screenHeight);
+      tmp.width = Math.round(W * dpr);
+      tmp.height = Math.round(H * dpr);
       const ctx = tmp.getContext('2d');
       ctx.scale(dpr, dpr);
-      const W = screenWidth, H = screenHeight;
       const M = mortarWidth;
       // Mortar background
       ctx.fillStyle = mortarColor || DEFAULT_MORTAR_COLOR;
@@ -416,9 +417,21 @@ const BrickCanvas = forwardRef(function BrickCanvas(
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    // Debug: log key render parameters
+    try {
+      console.debug('BrickCanvas.render', { rowsLen: rows?.length, scale, screenWidth, screenHeight, mortarColor, effect });
+    } catch (e) {}
+
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     const logicalW = Math.max(1, Number(screenWidth) || 0);
     const logicalH = Math.max(1, Number(screenHeight) || 0);
+
+    // Safety: avoid rendering with invalid or extreme sizes
+    if (!Number.isFinite(logicalW) || !Number.isFinite(logicalH) || logicalW > 20000 || logicalH > 20000) {
+      // eslint-disable-next-line no-console
+      console.error('BrickCanvas: skipping render due to invalid canvas size', { logicalW, logicalH });
+      return;
+    }
 
     canvas.width = Math.round(logicalW * dpr);
     canvas.height = Math.round(logicalH * dpr);
@@ -428,8 +441,13 @@ const BrickCanvas = forwardRef(function BrickCanvas(
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, logicalW, logicalH);
+    try {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, logicalW, logicalH);
+    } catch (err) {
+      console.error('BrickCanvas render error', err);
+      return;
+    }
 
     // Reset context state to ensure clean rendering
     ctx.globalAlpha = 1;

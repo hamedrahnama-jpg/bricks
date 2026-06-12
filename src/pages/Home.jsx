@@ -16,6 +16,7 @@ const uid = () => String(_id++);
 
 const DEFAULT_PRIMARY = '#b5523a';
 const DEFAULT_ALT = '#c49a50';
+const TARGET_VISIBLE_GRID_COLUMNS = 27;
 
 function getMaxUnits(screenW, scale, mortar) {
   return Math.floor((screenW + mortar) / (scale + mortar));
@@ -167,6 +168,57 @@ function getCurrentRowUnits(rows, maxUnits) {
   return units >= maxUnits ? 0 : units;
 }
 
+function repeatRowToEnd(rows, maxUnits, rowIdx = null) {
+  if (!rows || rows.length === 0) return null;
+
+  const targetRowIdx = rowIdx ?? rows.length - 1;
+  const sourceRow = rows[targetRowIdx];
+  if (!sourceRow || sourceRow.length === 0) return null;
+
+  const currentUnits = sourceRow.reduce((s, b) => s + b.units, 0);
+  if (currentUnits <= 0 || currentUnits >= maxUnits) return rows;
+
+  const newRows = rows.map(r => [...r]);
+  const targetRow = newRows[targetRowIdx];
+  const blocked = getBlockedCols(newRows, targetRowIdx);
+  const sequence = sourceRow.filter(b => !b.isVoid);
+  if (sequence.length === 0) return null;
+
+  let filled = currentUnits;
+  let seqIdx = 0;
+
+  while (filled < maxUnits) {
+    if (blocked.has(filled)) {
+      targetRow.push(makeBrick(1, true, false, 1, 'transparent'));
+      filled++;
+      continue;
+    }
+
+    const source = sequence[seqIdx % sequence.length];
+    const remaining = maxUnits - filled;
+    let units = Math.min(source.units, remaining);
+
+    for (let c = filled; c < filled + units; c++) {
+      if (blocked.has(c)) {
+        units = c - filled;
+        break;
+      }
+    }
+
+    if (units <= 0) {
+      targetRow.push(makeBrick(1, true, false, 1, 'transparent'));
+      filled++;
+      continue;
+    }
+
+    targetRow.push({ ...source, id: uid(), units });
+    filled += units;
+    seqIdx++;
+  }
+
+  return newRows;
+}
+
 export default function Home() {
   const { state: rows, setState: setRows, undo, redo, canUndo, canRedo } = useUndoRedo([]);
   const { modules, saveModule, deleteModule } = useModuleLibrary();
@@ -178,7 +230,7 @@ export default function Home() {
   const [showGrid, setShowGrid] = useState(true);
   const [primaryColor, setPrimaryColor] = useState(DEFAULT_PRIMARY);
   const [altColor, setAltColor] = useState(DEFAULT_ALT);
-  const [mortarColor, setMortarColor] = useState('#444444');
+  const [mortarColor, setMortarColor] = useState('#44403c');
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [selColor, setSelColor] = useState('#e8803a');
   const [insertAt, setInsertAt] = useState(null);
@@ -193,6 +245,7 @@ export default function Home() {
   const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
   const canvasRef = useRef(null);
   const scrollRef = useRef(null);
+  const canvasViewportRef = useRef(null);
   const altKeyRef = useRef(false);
   const insertAtRef = useRef(null);
 
@@ -201,15 +254,37 @@ export default function Home() {
   // Keeping them in sync: rowStep = scale + mortarWidth.
   const _rowStep = scale + mortarWidth;
   const _colStep = scale + mortarWidth;
-  const _wholeCols = Math.floor(size.w / _colStep);
-  const _canvasW = Math.max(_colStep, _wholeCols * _colStep - mortarWidth);
+  const _canvasW = Math.max(_colStep, size.w);
   const maxUnits = getMaxUnits(_canvasW, scale, mortarWidth);
 
   useEffect(() => {
-    const onResize = () => setSize({ w: window.innerWidth, h: window.innerHeight });
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const measure = () => {
+      const el = canvasViewportRef.current;
+      setSize({
+        w: Math.max(1, Math.floor(el?.clientWidth || window.innerWidth)),
+        h: Math.max(1, Math.floor(el?.clientHeight || window.innerHeight))
+      });
+    };
+
+    measure();
+    window.addEventListener('resize', measure);
+
+    let observer;
+    if (window.ResizeObserver && canvasViewportRef.current) {
+      observer = new ResizeObserver(measure);
+      observer.observe(canvasViewportRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', measure);
+      observer?.disconnect();
+    };
   }, []);
+
+  useEffect(() => {
+    const nextScale = Math.max(4, Math.round((size.w + mortarWidth) / TARGET_VISIBLE_GRID_COLUMNS - mortarWidth));
+    setScale(prev => prev === nextScale ? prev : nextScale);
+  }, [size.w, mortarWidth]);
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -357,7 +432,7 @@ export default function Home() {
 
   const handleExportPNG = () => {
     if (!canvasRef.current) return;
-    const dataUrl = canvasRef.current.renderForPrint();
+    const dataUrl = canvasRef.current.renderForPrint({ width: size.w, height: size.h });
     if (!dataUrl) return;
     const a = document.createElement('a');
     a.href = dataUrl;
@@ -367,8 +442,8 @@ export default function Home() {
 
   const handleExportSVG = () => {
     const M = mortarWidth;
-    const svgH = Math.max(rows.length * (scale + M) + M, scale + M * 2);
     const svgW = size.w;
+    const svgH = size.h;
     const resolveColor = (brick) =>
       brick.colorRole === 'primary' ? primaryColor :
       brick.colorRole === 'alt' ? altColor :
@@ -415,11 +490,16 @@ export default function Home() {
 
   const handleExportPDF = async () => {
     if (!canvasRef.current) return;
-    const imgData = canvasRef.current.renderForPrint();
+    const imgData = canvasRef.current.renderForPrint({ width: size.w, height: size.h });
     if (!imgData) return;
     const { jsPDF } = await import('jspdf');
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pageW = 210, pageH = 297;
+    const pxPerMm = 96 / 25.4;
+    const screenW = Math.max(1, size.w / pxPerMm);
+    const screenH = Math.max(1, size.h / pxPerMm);
+    const orientation = screenW >= screenH ? 'landscape' : 'portrait';
+    const pageW = orientation === 'landscape' ? Math.max(screenW, screenH) : Math.min(screenW, screenH);
+    const pageH = orientation === 'landscape' ? Math.min(screenW, screenH) : Math.max(screenW, screenH);
+    const pdf = new jsPDF({ orientation, unit: 'mm', format: [pageW, pageH] });
     const tmpImg = new Image();
     tmpImg.src = imgData;
     await new Promise(res => { tmpImg.onload = res; });
@@ -524,30 +604,22 @@ export default function Home() {
     }
   };
 
-  const selBarH = selectedIds.size > 0 ? 40 : 0;
-  const toolbarH = 56;
-  const symBarH = 32;
-  const libraryH = libraryOpen ? 130 : 30; // collapsed = header only
-  const rawViewportH = size.h - toolbarH - 44 - selBarH - libraryH - symBarH;
-
-  // Snap viewport height so only whole rows are visible (no half-row clipping)
-  const wholeRows = Math.floor(rawViewportH / _rowStep);
-  // Ensure odd number of whole rows visible
-  const visibleRows = wholeRows % 2 === 0 ? Math.max(1, wholeRows - 1) : wholeRows;
-  const viewportH = Math.max(_rowStep, visibleRows * _rowStep);
+  const viewportH = Math.max(_rowStep, size.h);
 
   // Re-use pre-computed canvasW
   const canvasW = _canvasW;
 
   const totalRowsH = (rows ? rows.length : 0) * _rowStep + mortarWidth;
-  const canvasH = Math.max(viewportH, totalRowsH + viewportH * 0.5);
+  const canvasH = Math.max(viewportH, totalRowsH);
   // Auto-scroll to bottom when rows grow
   useEffect(() => {
     if (!rows) return;
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [rows]);
+    const scrollEl = scrollRef.current;
+    if (!scrollEl) return;
+
+    const maxScroll = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+    scrollEl.scrollTop = maxScroll;
+  }, [rows, canvasH]);
 
   const handleRepeatPattern = () => {
     if (!rows || rows.length === 0) return;
@@ -566,6 +638,20 @@ export default function Home() {
     setSelectedIds(new Set());
     setInsertAt(null);
     insertAtRef.current = null;
+  };
+
+  const handleRepeatRow = () => {
+    if (!rows || rows.length === 0) return;
+
+    const targetRowIdx = insertAtRef.current?.rowIdx ?? rows.length - 1;
+    if (targetRowIdx < 0 || targetRowIdx >= rows.length) return;
+
+    setRows(prev => repeatRowToEnd(prev, maxUnits, targetRowIdx) || prev);
+
+    const nextPos = { rowIdx: targetRowIdx + 1, col: 0 };
+    insertAtRef.current = nextPos;
+    setInsertAt(nextPos);
+    setSelectedIds(new Set());
   };
 
   const handleAppendModule = (mod) => {
@@ -633,20 +719,7 @@ export default function Home() {
         onPrimaryChange={setPrimaryColor} onAltChange={setAltColor}
         mortarColor={mortarColor} onMortarChange={setMortarColor}
         mortarWidth={mortarWidth} onMortarWidthChange={setMortarWidth}
-        scale={scale} onScaleChange={(newScale) => {
-          // Snap to nearest scale that yields an odd number of whole rows visible
-          const M = mortarWidth;
-          const h = size.h - toolbarH - 44 - selBarH - libraryH - symBarH;
-          let best = newScale;
-          let bestDist = Infinity;
-          for (let s = Math.max(16, newScale - 6); s <= Math.min(64, newScale + 6); s++) {
-            const n = Math.floor(h / (s + M));
-            const isOdd = n % 2 !== 0;
-            const dist = Math.abs(s - newScale) + (isOdd ? 0 : 0.5); // prefer odd, then closest
-            if (n > 0 && dist < bestDist) { bestDist = dist; best = s; }
-          }
-          setScale(best);
-        }}
+        scale={scale} onScaleChange={(newScale) => setScale(Math.max(4, newScale))}
         showGrid={showGrid} onGridToggle={() => setShowGrid(v => !v)}
         effect={effect} onEffectChange={setEffect}
         maxUnits={maxUnits}
@@ -695,15 +768,16 @@ export default function Home() {
         />
       )}
 
-      <div
-        ref={scrollRef}
-        style={{ height: viewportH, width: canvasW, overflowX: 'hidden' }}
-        className="overflow-y-auto relative"
-        onClick={() => { setSelectedIds(new Set()); insertAtRef.current = null; setInsertAt(null); }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
+      <div ref={canvasViewportRef} className="flex-1 min-h-0 w-full overflow-hidden bg-background">
+        <div
+          ref={scrollRef}
+          style={{ height: '100%', width: '100%', overflowX: 'hidden' }}
+          className="overflow-y-auto relative"
+          onClick={() => { setSelectedIds(new Set()); insertAtRef.current = null; setInsertAt(null); }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
         {swipePreview && (
           <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
             <div className="flex flex-col items-center gap-3">
@@ -758,14 +832,22 @@ export default function Home() {
           symV={symV}
           symH={symH}
         />
+        </div>
       </div>
 
-      <Footer brickCount={rows.flat().filter(b => !b.isVoid).length} currentRowUnits={curRowUnits} maxUnits={maxUnits} onRepeatPattern={handleRepeatPattern} />
+      <Footer
+        brickCount={rows.flat().filter(b => !b.isVoid).length}
+        currentRowUnits={curRowUnits}
+        maxUnits={maxUnits}
+        onRepeatPattern={handleRepeatPattern}
+        onRepeatRow={handleRepeatRow}
+      />
 
       <PrintDialog
         open={printOpen}
         onClose={() => setPrintOpen(false)}
-        getImageData={() => canvasRef.current?.renderForPrint() ?? null}
+        getImageData={() => canvasRef.current?.renderForPrint({ width: size.w, height: size.h }) ?? null}
+        pageSize={{ w: size.w, h: size.h }}
       />
     </div>
   );

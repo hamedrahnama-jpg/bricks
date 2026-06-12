@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Grid, Printer, Download, Trash2, Plus, Minus, Save, FolderOpen, ChevronDown, Sparkles, Menu, X, ImagePlus, Undo2, Redo2 } from 'lucide-react';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "./ui/dropdown-menu";
 import TemplateMenu from './TemplateMenu';
 
 const EFFECTS = [
@@ -60,12 +60,12 @@ export default function Toolbar({
 
         {/* Scale controls */}
         <div className="flex items-center gap-1 flex-shrink-0">
-          <button onClick={() => onScaleChange(Math.max(16, scale - 2))}
+          <button onClick={() => onScaleChange(Math.max(4, scale - 2))}
             className="w-7 h-7 flex items-center justify-center rounded hover:bg-accent text-foreground/70 transition-colors">
             <Minus className="w-3.5 h-3.5" />
           </button>
           <span className="text-xs text-muted-foreground w-12 text-center tabular-nums">{scale}px</span>
-          <button onClick={() => onScaleChange(Math.min(64, scale + 2))}
+          <button onClick={() => onScaleChange(Math.min(96, scale + 2))}
             className="w-7 h-7 flex items-center justify-center rounded hover:bg-accent text-foreground/70 transition-colors">
             <Plus className="w-3.5 h-3.5" />
           </button>
@@ -154,12 +154,12 @@ export default function Toolbar({
 
         {/* Quick scale */}
         <div className="flex items-center gap-1">
-          <button onClick={() => onScaleChange(Math.max(16, scale - 2))}
+          <button onClick={() => onScaleChange(Math.max(4, scale - 2))}
             className="w-7 h-7 flex items-center justify-center rounded hover:bg-accent text-foreground/70">
             <Minus className="w-3.5 h-3.5" />
           </button>
           <span className="text-xs text-muted-foreground tabular-nums w-10 text-center">{scale}px</span>
-          <button onClick={() => onScaleChange(Math.min(64, scale + 2))}
+          <button onClick={() => onScaleChange(Math.min(96, scale + 2))}
             className="w-7 h-7 flex items-center justify-center rounded hover:bg-accent text-foreground/70">
             <Plus className="w-3.5 h-3.5" />
           </button>

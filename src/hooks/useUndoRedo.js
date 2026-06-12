@@ -3,31 +3,43 @@ import { useState, useCallback } from 'react';
 const MAX_HISTORY = 60;
 
 export default function useUndoRedo(initialState) {
-  const [history, setHistory] = useState([initialState]);
-  const [index, setIndex] = useState(0);
+  const [stack, setStack] = useState({
+    history: [initialState],
+    index: 0
+  });
 
-  const state = history[index];
+  const { history, index } = stack;
+  const state = history[index] ?? initialState;
 
   const setState = useCallback((updater) => {
-    setHistory(prev => {
-      const current = prev[index];
+    setStack(prev => {
+      const current = prev.history[prev.index];
       const next = typeof updater === 'function' ? updater(current) : updater;
-      // Slice off any redo history, append new state
-      const newHistory = prev.slice(0, index + 1).concat([next]);
-      return newHistory.length > MAX_HISTORY ? newHistory.slice(newHistory.length - MAX_HISTORY) : newHistory;
+
+      let history = prev.history.slice(0, prev.index + 1).concat([next]);
+      if (history.length > MAX_HISTORY) {
+        history = history.slice(history.length - MAX_HISTORY);
+      }
+
+      return {
+        history,
+        index: history.length - 1
+      };
     });
-    setIndex(prev => Math.min(prev + 1, MAX_HISTORY - 1));
-  }, [index]);
+  }, []);
 
   const undo = useCallback(() => {
-    setIndex(prev => Math.max(0, prev - 1));
+    setStack(prev => ({
+      ...prev,
+      index: Math.max(0, prev.index - 1)
+    }));
   }, []);
 
   const redo = useCallback(() => {
-    setHistory(prev => {
-      setIndex(i => Math.min(i + 1, prev.length - 1));
-      return prev;
-    });
+    setStack(prev => ({
+      ...prev,
+      index: Math.min(prev.index + 1, prev.history.length - 1)
+    }));
   }, []);
 
   const canUndo = index > 0;

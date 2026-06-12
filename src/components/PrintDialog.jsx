@@ -18,15 +18,24 @@ const SCALE_MODES = [
 // 96 dpi → mm conversion
 const PX_PER_MM = 96 / 25.4;
 
-export default function PrintDialog({ open, onClose, getImageData }) {
-  const [paper, setPaper] = useState('A4');
+export default function PrintDialog({ open, onClose, getImageData, pageSize }) {
+  const customW = Math.max(1, (pageSize?.w || 1) / PX_PER_MM);
+  const customH = Math.max(1, (pageSize?.h || 1) / PX_PER_MM);
+  const customPortrait = {
+    w: Math.min(customW, customH),
+    h: Math.max(customW, customH),
+    label: `Screen (${Math.round(customW)} × ${Math.round(customH)} mm)`
+  };
+  const paperSizes = { Screen: customPortrait, ...PAPER_SIZES };
+
+  const [paper, setPaper] = useState('Screen');
   const [orientation, setOrientation] = useState('portrait');
   const [scaleMode, setScaleMode] = useState('fit');
   const [printing, setPrinting] = useState(false);
   const previewRef = useRef(null);
 
   // Effective page dims in mm
-  const base = PAPER_SIZES[paper];
+  const base = paperSizes[paper];
   const pageW_mm = orientation === 'portrait' ? base.w : base.h;
   const pageH_mm = orientation === 'portrait' ? base.h : base.w;
 
@@ -43,13 +52,15 @@ export default function PrintDialog({ open, onClose, getImageData }) {
 
   useEffect(() => {
     if (!open) return;
+    setPaper('Screen');
+    setOrientation((pageSize?.w || 0) >= (pageSize?.h || 0) ? 'landscape' : 'portrait');
     const data = getImageData();
     if (!data) return;
     setImgSrc(data);
     const tmp = new Image();
     tmp.onload = () => { setImgNaturalW(tmp.width); setImgNaturalH(tmp.height); };
     tmp.src = data;
-  }, [open, getImageData]);
+  }, [open, getImageData, pageSize?.w, pageSize?.h]);
 
   // Compute rendered image rect inside the preview box (in preview-px)
   const getImgRect = (pW, pH) => {
@@ -122,7 +133,7 @@ export default function PrintDialog({ open, onClose, getImageData }) {
             <div>
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">Paper Size</label>
               <div className="flex flex-col gap-1">
-                {Object.entries(PAPER_SIZES).map(([key, val]) => (
+                {Object.entries(paperSizes).map(([key, val]) => (
                   <button key={key} onClick={() => setPaper(key)}
                     className={`text-left px-3 py-1.5 rounded text-xs border transition-colors ${paper === key ? 'bg-primary/20 text-primary border-primary/40' : 'border-border text-muted-foreground hover:bg-accent'}`}>
                     {val.label}

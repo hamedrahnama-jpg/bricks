@@ -6,7 +6,7 @@ const Key = ({ children }) => (
   </kbd>
 );
 
-export default function Footer({ brickCount, currentRowUnits, maxUnits, onRepeatPattern }) {
+export default function Footer({ brickCount, currentRowUnits, maxUnits, onRepeatPattern, onRepeatRow }) {
   return (
     <div className="h-11 bg-card border-t border-border flex items-center justify-between px-4 flex-shrink-0">
       <div className="flex items-center gap-4 text-xs text-muted-foreground">
@@ -18,6 +18,13 @@ export default function Footer({ brickCount, currentRowUnits, maxUnits, onRepeat
           title="Repeat the current rows as a tiling pattern to fill the wall"
         >
           <Repeat2 className="w-3.5 h-3.5" /> Repeat Pattern
+        </button>
+        <button
+          onClick={onRepeatRow}
+          className="flex items-center gap-1 px-2 py-1 rounded bg-secondary text-secondary-foreground border border-border hover:bg-accent transition-colors text-xs font-medium"
+          title="Repeat the current row sequence to the end of the row"
+        >
+          <Repeat2 className="w-3.5 h-3.5" /> Repeat Row
         </button>
       </div>
       <div className="hidden lg:flex items-center gap-3 text-xs text-muted-foreground/60">

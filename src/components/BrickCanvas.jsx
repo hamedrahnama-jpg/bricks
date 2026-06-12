@@ -342,7 +342,7 @@ function applySketch(ctx, x, y, w, h, id, brickColor) {
 // ────────────────────────────────────────────────────────────────────────────
 
 const BrickCanvas = forwardRef(function BrickCanvas(
-  { rows, scale, showGrid, selectedIds, primaryColor, altColor, mortarColor, mortarWidth = 3, effect, insertAt, screenWidth, screenHeight, onBrickClick, onVoidClick, bgImage, bgOpacity, bgScale, bgRotation, symV, symH },
+  { rows, scale, showGrid, selectedIds, primaryColor, altColor, mortarColor, mortarWidth = 3, effect, insertAt, screenWidth, screenHeight, onBrickClick, onVoidClick, bgImage, bgOpacity, bgScale, bgRotation, symV, symH, symVAxisCol, symHAxisRow },
   ref
 ) {
   const canvasRef = useRef(null);
@@ -596,8 +596,12 @@ const BrickCanvas = forwardRef(function BrickCanvas(
 
     // ── Symmetry guide lines ────────────────────────────────────────────────
     if (symV) {
-      const lineX = screenWidth / 2;
+      const axisCol = Math.max(0, Number(symVAxisCol) || 0);
+      const colX = axisCol * (scale + M);
+      const lineX = Math.max(0, Math.min(screenWidth, colX + scale / 2));
       ctx.save();
+      ctx.fillStyle = 'rgba(167,139,250,0.16)';
+      ctx.fillRect(colX, 0, scale, screenHeight);
       ctx.strokeStyle = 'rgba(167,139,250,0.85)'; // violet
       ctx.lineWidth = 2;
       ctx.setLineDash([8, 5]);
@@ -614,8 +618,12 @@ const BrickCanvas = forwardRef(function BrickCanvas(
       ctx.restore();
     }
     if (symH) {
-      const lineY = screenHeight / 2;
+      const axisRow = Math.max(0, Number(symHAxisRow) || 0);
+      const rowY = screenHeight - (axisRow + 1) * (scale + M);
+      const lineY = Math.max(0, Math.min(screenHeight, rowY + scale / 2));
       ctx.save();
+      ctx.fillStyle = 'rgba(52,211,153,0.16)';
+      ctx.fillRect(0, rowY, screenWidth, scale);
       ctx.strokeStyle = 'rgba(52,211,153,0.85)'; // emerald
       ctx.lineWidth = 2;
       ctx.setLineDash([8, 5]);
@@ -632,7 +640,7 @@ const BrickCanvas = forwardRef(function BrickCanvas(
     }
 
     hitRectsRef.current = hitRects;
-  }, [rows, scale, showGrid, selectedIds, primaryColor, altColor, mortarColor, mortarWidth, insertAt, screenWidth, screenHeight, effect, bgImage, bgOpacity, bgScale, bgRotation, symV, symH]);
+  }, [rows, scale, showGrid, selectedIds, primaryColor, altColor, mortarColor, mortarWidth, insertAt, screenWidth, screenHeight, effect, bgImage, bgOpacity, bgScale, bgRotation, symV, symH, symVAxisCol, symHAxisRow]);
 
   const handleClick = (e) => {
     const canvas = canvasRef.current;

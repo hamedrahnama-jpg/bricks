@@ -219,6 +219,108 @@ function repeatRowToEnd(rows, maxUnits, rowIdx = null) {
   return newRows;
 }
 
+function getRowPlacements(row) {
+  const placements = [];
+  let col = 0;
+  row.forEach(brick => {
+    if (!brick.isVoid) placements.push({ brick, col, units: brick.units });
+    col += brick.units;
+  });
+  return placements;
+}
+
+function slicePlacement(placement, startCol, endCol) {
+  const left = Math.max(placement.col, startCol);
+  const right = Math.min(placement.col + placement.units, endCol);
+  if (right <= left) return null;
+  return {
+    brick: {
+      ...placement.brick,
+      units: right - left,
+      verticalUnits: placement.brick.isVertical ? placement.brick.verticalUnits : 1
+    },
+    col: left,
+    units: right - left
+  };
+}
+
+function rowFromPlacements(placements, maxUnits, suffix) {
+  const byCol = [...placements]
+    .filter(p => p && p.units > 0 && p.col >= 0 && p.col < maxUnits)
+    .sort((a, b) => a.col - b.col);
+  const row = [];
+  let col = 0;
+
+  byCol.forEach((placement, idx) => {
+    const nextCol = Math.max(0, Math.min(maxUnits, placement.col));
+    const units = Math.min(placement.units, maxUnits - nextCol);
+    if (units <= 0 || nextCol < col) return;
+    if (nextCol > col) {
+      row.push({ id: `void_${suffix}_${idx}`, units: nextCol - col, isVoid: true, isVertical: false, verticalUnits: 1, color: 'transparent', colorRole: 'custom' });
+    }
+    row.push({ ...placement.brick, id: `${placement.brick.id}_${suffix}_${idx}`, units });
+    col = nextCol + units;
+  });
+
+  return row;
+}
+
+function mirrorRowAroundColumn(row, maxUnits, axisCol) {
+  const axis = Math.max(0, Math.min(maxUnits - 1, Math.round(axisCol)));
+  const placements = getRowPlacements(row);
+  const axisColumn = placements
+    .map(placement => slicePlacement(placement, axis, axis + 1))
+    .filter(Boolean);
+  const source = placements
+    .map(placement => slicePlacement(placement, 0, axis))
+    .filter(Boolean);
+
+  const mirrored = source.map(placement => ({
+    brick: { ...placement.brick, id: `${placement.brick.id}_mirror_col` },
+    col: 2 * axis + 1 - (placement.col + placement.units),
+    units: placement.units
+  }));
+
+  return rowFromPlacements([...source, ...axisColumn, ...mirrored], maxUnits, `v${axis}_left`);
+}
+
+function mirrorRowsAroundRow(rows, axisRow, maxUnits) {
+  const axis = Math.max(0, Math.round(axisRow));
+  const source = rows.map((row, rowIdx) => ({ row, rowIdx })).filter(item => item.rowIdx < axis);
+  const nextRows = [];
+  const mirroredByRow = new Map();
+
+  if (rows[axis]) {
+    nextRows[axis] = rows[axis].map(brick => ({ ...brick, id: `${brick.id}_haxis_${axis}` }));
+  }
+
+  source.forEach(({ row, rowIdx }) => {
+    const clone = row.map(brick => ({ ...brick, id: `${brick.id}_hsrc_${rowIdx}` }));
+    nextRows[rowIdx] = clone;
+
+    getRowPlacements(row).forEach(placement => {
+      const brick = placement.brick;
+      const targetRowIdx = brick.isVertical
+        ? 2 * axis - (rowIdx + brick.verticalUnits - 1)
+        : 2 * axis - rowIdx;
+      if (targetRowIdx < 0) return;
+
+      if (!mirroredByRow.has(targetRowIdx)) mirroredByRow.set(targetRowIdx, []);
+      mirroredByRow.get(targetRowIdx).push({
+        brick: { ...brick, id: `${brick.id}_hmirror_${targetRowIdx}` },
+        col: placement.col,
+        units: placement.units
+      });
+    });
+  });
+
+  mirroredByRow.forEach((placements, rowIdx) => {
+    nextRows[rowIdx] = rowFromPlacements(placements, maxUnits, `hmirror_${rowIdx}`);
+  });
+
+  return nextRows.map(row => row || []);
+}
+
 export default function Home() {
   const { state: rows, setState: setRows, undo, redo, canUndo, canRedo } = useUndoRedo([]);
   const { modules, saveModule, deleteModule } = useModuleLibrary();
@@ -226,6 +328,8 @@ export default function Home() {
   const [printOpen, setPrintOpen] = useState(false);
   const [symV, setSymV] = useState(false); // vertical axis → mirror left↔right
   const [symH, setSymH] = useState(false); // horizontal axis → mirror top↔bottom
+  const [symVAxisCol, setSymVAxisCol] = useState(0);
+  const [symHAxisRow, setSymHAxisRow] = useState(0);
   const [scale, setScale] = useState(16);
   const [showGrid, setShowGrid] = useState(true);
   const [primaryColor, setPrimaryColor] = useState(DEFAULT_PRIMARY);
@@ -655,12 +759,23 @@ export default function Home() {
   };
 
   const viewportH = Math.max(_rowStep, size.h);
+  const visibleRowCount = Math.max(1, Math.ceil(viewportH / _rowStep));
 
   // Re-use pre-computed canvasW
   const canvasW = _canvasW;
 
   const totalRowsH = (rows ? rows.length : 0) * _rowStep + mortarWidth;
   const canvasH = Math.max(viewportH, totalRowsH);
+
+  useEffect(() => {
+    const maxCol = Math.max(0, maxUnits - 1);
+    setSymVAxisCol(prev => prev > 0 ? Math.min(prev, maxCol) : Math.floor(maxCol / 2));
+  }, [maxUnits]);
+
+  useEffect(() => {
+    const maxRow = Math.max(0, Math.ceil(canvasH / _rowStep) - 1);
+    setSymHAxisRow(prev => prev > 0 ? Math.min(prev, maxRow) : Math.floor(Math.max(0, visibleRowCount - 1) / 2));
+  }, [canvasH, _rowStep, visibleRowCount]);
   // Auto-scroll to bottom when rows grow
   useEffect(() => {
     if (!rows) return;
@@ -721,40 +836,12 @@ export default function Home() {
 
     let r = rows.map(row => [...row]);
 
-    // Vertical symmetry: mirror each row left ↔ right around the canvas centre.
-    // We keep the left half of each row and produce a flipped copy for the right half.
     if (symV) {
-      r = r.map(row => {
-        const halfUnits = Math.floor(maxUnits / 2);
-        // Collect bricks that fall within the left half
-        const leftBricks = [];
-        let filled = 0;
-        for (const brick of row) {
-          if (filled >= halfUnits) break;
-          const take = Math.min(brick.units, halfUnits - filled);
-          leftBricks.push(take < brick.units ? { ...brick, units: take } : brick);
-          filled += take;
-        }
-        // Mirror: reverse, flipping the column order
-        const mirrored = [...leftBricks].reverse().map(b => ({ ...b, id: b.id + '_mv' }));
-        // Pad if needed
-        const leftTotal = leftBricks.reduce((s, b) => s + b.units, 0);
-        const mirrorTotal = mirrored.reduce((s, b) => s + b.units, 0);
-        const gap = maxUnits - leftTotal - mirrorTotal;
-        const pad = gap > 0 ? [makeBrick(gap, true, false, 1, 'transparent')] : [];
-        return [...leftBricks, ...pad, ...mirrored];
-      });
+      r = r.map(row => mirrorRowAroundColumn(row, maxUnits, symVAxisCol));
     }
 
-    // Horizontal symmetry: mirror rows top ↔ bottom.
-    // Keep the bottom half of the rows and mirror upward.
     if (symH) {
-      const halfRows = Math.floor(r.length / 2);
-      const bottom = r.slice(0, halfRows);
-      const top = [...bottom].reverse().map(row =>
-        row.map(b => ({ ...b, id: b.id + '_mh' }))
-      );
-      r = [...bottom, ...top];
+      r = mirrorRowsAroundRow(r, symHAxisRow, maxUnits);
     }
 
     return r;
@@ -791,6 +878,12 @@ export default function Home() {
           symV={symV} symH={symH}
           onToggleV={() => setSymV(v => !v)}
           onToggleH={() => setSymH(v => !v)}
+          maxUnits={maxUnits}
+          maxRows={Math.max(0, Math.ceil(canvasH / _rowStep) - 1)}
+          symVAxisCol={symVAxisCol}
+          symHAxisRow={symHAxisRow}
+          onVAxisChange={setSymVAxisCol}
+          onHAxisChange={setSymHAxisRow}
         />
       </div>
       <ModuleLibrary
@@ -900,6 +993,8 @@ export default function Home() {
           bgRotation={bgRotation}
           symV={symV}
           symH={symH}
+          symVAxisCol={symVAxisCol}
+          symHAxisRow={symHAxisRow}
         />
         </div>
       </div>
